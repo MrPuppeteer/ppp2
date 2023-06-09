@@ -2,6 +2,6 @@
 
 int main()
 {
-    for (char i = 'a'; i<='z'; i++)
-        cout << i << '\t' << (int)i << '\n';
+  for (char i = 'a'; i <= 'z'; i++)
+    cout << i << '\t' << (int)i << '\n';
 }

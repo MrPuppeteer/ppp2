@@ -2,6 +2,6 @@
 
 int main() // Error 1: Main
 {
-    string s = "Goodbye, cruel world!"; // Error 2: STRING
-    cout << s << '\n';					// Error 3,4: cOut,S
+  string s = "Goodbye, cruel world!"; // Error 2: STRING
+  cout << s << '\n';                  // Error 3,4: cOut,S
 }
