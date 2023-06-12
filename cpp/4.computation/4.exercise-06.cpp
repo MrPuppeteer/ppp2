@@ -1,8 +1,9 @@
 #include "std_lib_facilities.h"
 
 const vector<string> numbers = {
-    "zero", "one", "two", "three", "four",
-    "five", "six", "seven", "eight", "nine"};
+  "zero", "one", "two", "three", "four",
+  "five", "six", "seven", "eight", "nine"
+};
 
 int get_number(string number)
 {
@@ -24,7 +25,7 @@ int main()
   {
     if (cin >> n)
     {
-      n<0 || n> 10
+      n < 0 || n > 10
           ? cout << "Please enter a single-digit number!\n"
           : cout << numbers[n] << '\n';
     }

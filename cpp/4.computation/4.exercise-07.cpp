@@ -1,8 +1,9 @@
 #include "std_lib_facilities.h"
 
 vector<string> numbers = {
-    "zero", "one", "two", "three", "four",
-    "five", "six", "seven", "eight", "nine"};
+  "zero", "one", "two", "three", "four",
+  "five", "six", "seven", "eight", "nine"
+};
 
 double get_number();
 double add(double x, double y);
