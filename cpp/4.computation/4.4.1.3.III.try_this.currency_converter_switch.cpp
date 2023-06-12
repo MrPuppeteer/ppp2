@@ -1,6 +1,6 @@
 #include "std_lib_facilities.h"
 
-// convert from yen/euros/pounds to dollars
+// convert from yen/euros/pounds/yuan/kroner to dollars
 // a suffix 'y', 'e', 'p', 'c', 'k' indicates the unit of the input
 // any other suffix is an error
 int main()
