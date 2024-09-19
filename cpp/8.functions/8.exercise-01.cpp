@@ -1,0 +1,476 @@
+/* Grammar:
+ *
+ * Calculation:
+ *  Statement
+ *  Command
+ *  Print
+ *  Calculation Statement
+ * Statement:
+ *  Declaration
+ *  Assignment
+ *  Expression
+ * Command:
+ *  "help"
+ *  "symbols"
+ *  "quit"
+ * Print:
+ *  ";"
+ *  "\n"
+ * Declaration:
+ *  "let" Name "=" Expression
+ *  "const" Name "=" Expression
+ * Assignment:
+ *  Name "=" Expression
+ * Expression:
+ *  Term
+ *  Expression "+" Term
+ *  Expression "-" Term
+ * Term:
+ *  Primary
+ *  Term "*" Primary
+ *  Term "/" Primary
+ *  Term "%" Primary
+ * Primary:
+ *  Number
+ *  "("Expression")"
+ *  "-" Primary
+ *  "+" Primary
+ *  Name
+ *  Function"("Arguments")"
+ * Function:
+ *  "sqrt"
+ *  "pow"
+ * Arguments:
+ *  Expression
+ *  Argument","Expression
+ * Number:
+ *  [floating-point-literal]
+ * Name:
+ *  [alphabetic-char]
+ *  Name[alphabetic-char]
+ *  Name[digit-char]
+ *  Name"_"
+ *
+ */
+
+#include "std_lib_facilities.h"
+
+// Token are initialized depending on the needs of each kind
+class Token {
+public:
+	char kind;
+	double value;
+	string name;
+
+	Token(char ch) :kind{ch} { }
+	Token(char ch, double val) :kind{ch}, value{val} { }
+  Token(char ch, string n) :kind{ch}, name{n} { }
+};
+
+class Token_stream {
+public:
+	Token_stream(istream& is) :input{cin} { }
+	Token get();
+	void putback(Token t) { buffer.push_back(t); }
+	void ignore(char c);
+private:
+  vector<Token> buffer;
+  istream& input;
+};
+
+// Token kinds
+const char let = 'L';
+const char constant = 'C';
+const char command = 'c';
+const char print = ';';
+const char number = '8';
+const char name = 'a';
+const char sqrtfunc = 's';
+const char powfunc = 'p';
+// Keywords
+const string declkey = "let";
+const string constkey = "const";
+const string symkey = "symbols";
+const string helpkey = "help";
+const string quitkey = "quit";
+// Builtin functions
+const string sqrtkey = "sqrt";
+const string powkey = "pow";
+
+// processes istream to get tokens from the implemented grammar
+Token Token_stream::get()
+{
+  if (!buffer.empty()) {
+    Token t = buffer.back();
+    buffer.pop_back();
+    return t;
+  }
+
+	char ch = ' ';
+
+  while (isspace(ch) && ch != '\n')
+    ch = input.get();
+
+	switch (ch) {
+  case ';':
+  case '\n':
+    return Token{print};
+	case '(':
+	case ')':
+	case '+':
+	case '-':
+	case '*':
+	case '/':
+	case '%':
+	case '=': // symbol literals
+  case ',': // separator for function argument
+		return Token{ch};
+	case '.':
+	case '0': case '1': case '2': case '3': case '4':
+	case '5': case '6': case '7': case '8': case '9': // numeric literals
+	{ 
+    input.putback(ch);
+	  double val;
+	  input >> val;
+	  return Token{number, val};
+	}
+	default: // get string keywords, for declaration, quit, or variable names.
+		if (isalpha(ch)) {
+			string s;
+			s += ch;
+			while (input.get(ch) && (isalpha(ch) || isdigit(ch) || ch == '_')) s += ch;
+			input.putback(ch);
+      if (s == declkey) return Token{let};
+      if (s == constkey) return Token{constant};
+			if (s == quitkey) return Token{command, quitkey};
+      if (s == helpkey) return Token{command, helpkey};
+      if (s == symkey) return Token{command, symkey};
+      if (s == sqrtkey) return Token{sqrtfunc};
+      if (s == powkey) return Token{powfunc};
+			return Token{name, s};
+		}
+		error("Bad token");
+	}
+}
+
+// clear input until c or newline is found
+void Token_stream::ignore(char c)
+{
+  while (!buffer.empty() && buffer.back().kind != c)
+    buffer.pop_back();
+
+  if (!buffer.empty()) return;
+
+	char ch {' '};
+	while (ch != c && ch != '\n')
+    ch = input.get();
+
+  return;
+}
+
+class Variable {
+public:
+	string name;
+	double value;
+  bool constant;
+};
+
+class Symbol_table {
+  vector<Variable> var_table;
+public:
+  double get(string s);
+  void set(string s, double d);
+  bool is_declared(string s);
+  void declare(string s, double d, bool c);
+  void print();
+};
+
+double Symbol_table::get(string s)
+{
+	for (const Variable& v : var_table)
+    if (v.name == s) return v.value;
+	error("get: undefined name ", s);
+}
+
+void Symbol_table::set(string s, double d)
+{
+	for (Variable& v : var_table)
+		if (v.name == s) {
+      if (v.constant) error(s, " is a constant");
+			v.value = d;
+			return;
+		}
+	error("set: undefined name ", s);
+}
+
+bool Symbol_table::is_declared(string s)
+{
+	for (const Variable& v : var_table)
+		if (v.name == s) return true;
+	return false;
+}
+
+void Symbol_table::declare(string s, double d, bool c)
+{
+  if (is_declared(s)) error(s, "is declared twice");
+  var_table.push_back(Variable{s, d, c});
+}
+
+void Symbol_table::print()
+{
+  for (Variable v : var_table) {
+    cout << v.name << " = " << v.value;
+    if (v.constant) cout << " (constant)";
+    cout << '\n';
+  }
+}
+
+Symbol_table symbols;
+Token_stream ts{cin};
+
+double expression(Token_stream& ts);
+
+// Evaluates function of kind c. The next input must be "("Expression")".
+double eval_func(char c, Token_stream& ts)
+{
+  vector<double> args;  // store function arguments
+
+  Token t = ts.get();
+  if (t.kind != '(') error("'(' expected after function");
+  
+  switch (c) {
+  case sqrtfunc:
+    args.push_back(expression(ts));
+    break;
+  case powfunc:
+    args.push_back(expression(ts));
+    t = ts.get();
+    if (t.kind != ',') error("Bad number of function arguments");
+    args.push_back(expression(ts));
+    break;
+  }
+
+  t = ts.get();
+  if (t.kind != ')') error("Bad number of function arguments");
+
+  // Implement evaluation & restrictions
+  switch (c) {
+  case sqrtfunc:
+    if (args[0] < 0) error("sqrt() is undefined for negative numbers");
+    return sqrt(args[0]);
+  case powfunc:
+    return pow(args[0], narrow_cast<int>(args[1]));
+  default:
+    error("Function not implemented");
+  }
+}
+
+double primary(Token_stream& ts)
+{
+	Token t = ts.get();
+	switch (t.kind) {
+	case '(':
+	{
+    double d = expression(ts);
+	  t = ts.get();
+	  if (t.kind != ')') error("')' expected");
+    return d;
+	}
+	case '-': // negative numbers
+		return - primary(ts);
+  case '+': // positive numbers
+    return primary(ts);
+	case number:
+		return t.value;
+	case name: // get variable value from table
+		return symbols.get(t.name);
+  case sqrtfunc:
+  case powfunc:
+    return eval_func(t.kind, ts);
+	default:
+		error("primary expected");
+	}
+}
+
+double term(Token_stream& ts)
+{
+	double left = primary(ts);
+	while (true) {
+		Token t = ts.get();
+		switch (t.kind) {
+		case '*':
+			left *= primary(ts);
+			break;
+		case '/':
+		{
+      double d = primary(ts);
+		  if (d == 0) error("divide by zero");
+		  left /= d;
+		  break;
+		}
+    case '%':
+    {
+      double d = primary(ts);
+      if (d == 0) error("divide by zero");
+      left = fmod(left, d);
+      break;
+    }
+		default:
+			ts.putback(t);
+			return left;
+		}
+	}
+}
+
+double expression(Token_stream& ts)
+{
+	double left = term(ts);
+	while (true) {
+		Token t = ts.get();
+		switch (t.kind) {
+		case '+':
+			left += term(ts);
+			break;
+		case '-':
+			left -= term(ts);
+			break;
+		default:
+			ts.putback(t);
+			return left;
+		}
+	}
+}
+
+double assignment(Token_stream& ts)
+{
+  Token t = ts.get();
+  string var_name = t.name;
+  if (!symbols.is_declared(var_name)) error(var_name, " has not been declared");
+
+  ts.get(); // get rid of the "="
+  double d = expression(ts);
+  symbols.set(var_name, d);
+  return d;
+}
+
+double declaration(Token_stream& ts)
+{
+  // Check if it's a constant declaration or not
+  Token t = ts.get();
+
+  // Check Declaration grammar after "let"/"const"
+	Token t2 = ts.get();
+	if (t2.kind != name) error("name expected in declaration");
+	string var_name = t2.name;
+	if (symbols.is_declared(var_name)) error(var_name, " declared twice");
+
+	Token t3 = ts.get();
+	if (t3.kind != '=') error("= missing in declaration of ", var_name);
+	
+  double d = expression(ts);
+	symbols.declare(var_name, d, t.kind == constant);
+	return d;
+}
+
+double statement(Token_stream& ts)
+{
+	Token t = ts.get();
+	switch (t.kind) {
+	case let:
+  case constant:
+		return declaration(ts);
+  case name:
+  {
+    Token t2 = ts.get();
+    ts.putback(t2);
+    ts.putback(t);
+    if (t2.kind == '=') {
+      return assignment(ts);
+    }
+    return expression(ts);
+  }
+	default:
+		ts.putback(t);
+		return expression(ts);
+	}
+}
+
+void clean_up_mess(Token_stream& ts)
+{
+	ts.ignore(print); // discard input until a print command or newline is found
+}
+
+const string prompt = "> ";
+const string result = "= ";
+
+void print_help()
+{
+  cout << "\nCalculator help.\n"
+       << "\n\tBASIC SYNTAX\n\n"
+       << "\tFinish an expression with ; or new line to print results.\n"
+       << "\tSupported operands: *, /, %, +, -, = (assignment).\n"
+       << "\tYou can use parenthesis to group expression: 4*(2+3).\n"
+       << "\n\tCOMMANDS\n\n"
+       << "\thelp     Prints this help message.\n"
+       << "\tsymbols  Prints currently declared variables and constants.\n"
+       << "\tquit     Exit the program.\n"
+       << "\n\tBUILT-IN FUNCTIONS\n\n"
+       << "\tsqrt(n)  Square root of n.\n"
+       << "\tpow(n,e) e power of n, with e an integer number.\n"
+       << "\n\tVARIABLES\n\n"
+       << "\tVariable names must be composed of alphanumeric characters and '_',\n"
+       << "\tand must start with an alphabetic character.\n\n"
+       << "\tlet var = expr   Declares a variable var and initializes it\n"
+       << "\t                 with expr expression evaluation value.\n\n"
+       << "\tconst var = expr Declares and initializes a constant named var.\n\n"
+       << "\tvar = expr       Assigns a new value to a previously declared\n"
+       << "\t                 variable.\n\n"
+       << "\tPredefined variables:\n"
+       << "\t\tpi 3.14159265359 (constant)\n"
+       << "\t\te  2.71828182846 (constant)\n"
+       << "\t\tk  1000\n\n";
+}
+
+void calculate(Token_stream& ts)
+{
+	while (true)
+  try {
+		cout << prompt;
+		Token t = ts.get();
+		while (t.kind == print) t = ts.get(); // remove print commands
+    if (t.kind == command) {
+      if (t.name == quitkey) return;
+      if (t.name == helpkey) print_help();
+      if (t.name == symkey) symbols.print();
+      ts.ignore(print); // Ignore whatever comes after a command
+    }
+    else {
+		  ts.putback(t);
+		  cout << result << statement(ts) << '\n';
+    }
+	}
+	catch (exception& e) {
+		cerr << e.what() << '\n';
+		clean_up_mess(ts);  // discard remaining input and prompt user again
+	}
+}
+
+int main()
+try {
+  // Predefined variables and constants
+  symbols.declare("k", 1000, false);
+  symbols.declare("pi", 3.14159265359, true);
+  symbols.declare("e", 2.71828182846, true);
+
+  cout << "Welcome to calculator. Write help for ... help.\n";
+	calculate(ts);
+	return 0;
+}
+catch (exception& e) {
+	cerr << "exception: " << e.what() << '\n';
+	return 1;
+}
+catch (...) {
+	cerr << "Unknown exception!\n";
+	return 2;
+}
